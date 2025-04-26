@@ -1,51 +1,154 @@
+import os
 import markdown
 
-from pygments import highlight
-from pygments.lexers import PythonLexer
-from pygments.formatters import HtmlFormatter
+# from pygments import highlight
+# from pygments.lexers import PythonLexer
+# from pygments.formatters import HtmlFormatter
 
-text = """
+from deepgram import DeepgramClient, LiveTranscriptionEvents, LiveOptions, Microphone
 
-# this is some simle markdon text
+from google import genai
+from google.genai import types
 
-```
-lets test this mannnn
-yay
-ayasudiuahwid
-asdads
-```
+from utils import md2html
 
-## adshihawu
+from icecream import ic
 
-dsaadsads
+# config
+# sorry for hardcoding this i hope u can forgive me
+DEEPGRAM_API_KEY = "7dfa9bdcbc7c93f2a638fd5a2ceacc1d68e1193b"
+GEMINI_MODEL = "gemini-2.0-flash"
+
+
+system_prompt = """
+When it's time for a new slide, start a new slide by writing: 'NEXT' at the beginning of the message, followed by the new buffer content. If you find yourself removing something, odds are, it is time for a new slide.
+IMPORTANT: When you write 'NEXT', ONLY write it for the first time. For the next updates you don't need NEXT on top unless you are starting yet another slide.
+When a question is asked what you think is something the audience needs to think about, make a new slide (NEXT) which is just # <the question>, and once we have moved on from it or have said the answer, you can do NEXT again and either bring back the old slide contents with modifications or start a clean slide based on your discretion.
 """.strip()
 
 
-def md2html(text: str) -> str:
-    """
-    converts text to html
-    :param text: text to convert
-    :return: html c0de
-    """
+class PresentationAssistant:
+    def __init__(self, system_prompt: str = system_prompt):
+        self.system_prompt = system_prompt
+        self.transcript = []
 
-    html_code = markdown.markdown(
-        text,
-        extensions=[
-            "markdown.extensions.fenced_code",
-            "markdown.extensions.codehilite",
-            "markdown.extensions.tables",
-            "markdown.extensions.footnotes",
-        ],
-    )
+        self.client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
+        self.contents = [
+            types.Content(
+                role="user",
+                parts=[
+                    types.Part.from_text(text="""Hi class!\n"""),
+                ],
+            ),
+            types.Content(
+                role="model",
+                parts=[
+                    types.Part.from_text(
+                        text="""SLIDE 1
+# 👋 Hi class!\n"""
+                    ),
+                ],
+            ),
+            types.Content(
+                role="user",
+                parts=[
+                    types.Part.from_text(text="""...\n"""),
+                ],
+            ),
+            types.Content(
+                role="model",
+                parts=[
+                    types.Part.from_text(
+                        text="""SLIDE 1
+# 👋 Hi class!\n"""
+                    ),
+                ],
+            ),
+        ]
 
-    return html_code
+        self.system_prompt = types.Part.from_text(text=system_prompt)
+
+    def process_transcription(self, text: str):
+        self.transcript.append(text)
+
+        ic(self.contents)
+
+        self.contents.append(
+            types.Content(role="user", parts=[types.Part.from_text(text=text)])
+        )
+
+        config = types.GenerateContentConfig(
+            response_mime_type="text/plain",
+            system_instruction=[self.system_prompt],
+        )
+
+        response_text = ""
+        for chunk in self.client.models.generate_content_stream(
+            model=GEMINI_MODEL, contents=self.contents, config=config
+        ):
+            print(chunk.text, end="")
+            response_text += chunk.text
+
+        self.contents.append(
+            types.Content(
+                role="model", parts=[types.Part.from_text(text=response_text)]
+            )
+        )
+
+        self.update_html_buffer(response_text)
+
+    def update_html_buffer(self, text=""):
+        with open("content.html", "w", encoding="utf-8") as f:
+            tempHTML = md2html(text)
+
+            print(tempHTML)
+            f.write(tempHTML)
 
 
-with open("content.html", "w") as f:
-    tempHTML = md2html(text)
-
-    print(tempHTML)
-    f.write(tempHTML)
+text = """
+# Hello class!
+""".strip()
 
 
-print()
+if __name__ == "__main__":
+    assistant = PresentationAssistant()
+
+    deepgram = DeepgramClient(api_key=DEEPGRAM_API_KEY)
+
+    try:
+        dg_connection = deepgram.listen.websocket.v("1")
+
+        def on_message(self, result, **kwargs):
+            if sentence := result.channel.alternatives[0].transcript:
+                print(f"Transcript: {sentence}")
+                assistant.process_transcription(sentence)  # auto-process
+
+        dg_connection.on(LiveTranscriptionEvents.Transcript, on_message)
+        dg_connection.on(
+            LiveTranscriptionEvents.Error, lambda self, e: print(f"ERROR: {e}")
+        )
+
+        options = LiveOptions(
+            model="nova-3",
+            punctuate=True,
+            language="en-US",
+            encoding="linear16",
+            channels=1,
+            sample_rate=16000,
+            smart_format=True,
+            endpointing=1000,
+        )
+
+        dg_connection.start(options)
+        microphone = Microphone(dg_connection.send)
+        microphone.start()
+
+        input("Press Enter to stop recording...\n\n")
+
+        microphone.finish()
+        dg_connection.finish()
+
+    except Exception as e:
+        print(f"Error: {e}")
+
+    assistant.update_html_buffer(text)
