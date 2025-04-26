@@ -43,7 +43,9 @@ Capabilities:
 - You can use all basic markdown features
 - You can use all HTML features when you see fit, by just adding plain HTML with no codeblock. For styles you can use <style> tags, or use tailwind classes.
 - You have built-in support for mermaid diagrams! You can use them by writing ```mermaid at the beginning of the codeblock and ``` at the end. You can use this to create flowcharts, sequence diagrams, class diagrams, and more! Just make sure to enclose the text in "quotes" so things are escaped properly.
-
+- You can use Latex like this:
+  When \\(a \\ne 0\\), there are two solutions to \\(ax^2 + bx + c = 0\\) and they are
+  \\[x = {-b \\pm \\sqrt{b^2-4ac} \\over 2a}.\\]
 """.strip()
 
 

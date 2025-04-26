@@ -1,4 +1,5 @@
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+
 mermaid.initialize({ startOnLoad: true, theme: "dark" });
 
 let lastContent = "";
@@ -18,6 +19,8 @@ async function fetchContent() {
         const contentElement = document.getElementById("content");
         contentElement.innerHTML = text; // replace content
         mermaid.run(); // re-render mermaid diagrams
+        window.MathJax.typeset();
+        MathJax.typeset();
       }
     }
   } catch (error) {
