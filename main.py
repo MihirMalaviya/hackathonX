@@ -1,17 +1,24 @@
+# this is for env variables
 import os
-import markdown
+
+# this is for regex in parsing the AI output
+import re
 
 # from pygments import highlight
 # from pygments.lexers import PythonLexer
 # from pygments.formatters import HtmlFormatter
 
+# this is for STT w/ the deepgram api
 from deepgram import DeepgramClient, LiveTranscriptionEvents, LiveOptions, Microphone
 
+# this is for generating text with the google gemini api
 from google import genai
 from google.genai import types
 
+# this is for the html conversion
 from utils import md2html
 
+# this is for debugging
 from icecream import ic
 
 # config
@@ -20,10 +27,23 @@ DEEPGRAM_API_KEY = "7dfa9bdcbc7c93f2a638fd5a2ceacc1d68e1193b"
 GEMINI_MODEL = "gemini-2.0-flash"
 
 
-system_prompt = """
+system_prompt = """You are an assistant for creating live presentation notes in markdown.
+
+Your job is to take a stream of spoken input (as text) and maintain a markdown buffer that reflects key ideas clearly and concisely.
+
+Each response should:
+- Modify or append to the current markdown buffer
+- Use clear, slide-like formatting
+
 When it's time for a new slide, start a new slide by writing: 'NEXT' at the beginning of the message, followed by the new buffer content. If you find yourself removing something, odds are, it is time for a new slide.
 IMPORTANT: When you write 'NEXT', ONLY write it for the first time. For the next updates you don't need NEXT on top unless you are starting yet another slide.
 When a question is asked what you think is something the audience needs to think about, make a new slide (NEXT) which is just # <the question>, and once we have moved on from it or have said the answer, you can do NEXT again and either bring back the old slide contents with modifications or start a clean slide based on your discretion.
+
+Capabilities:
+- You can use all basic markdown features
+- You can use all HTML features when you see fit, by just adding plain HTML with no codeblock. For styles you can use <style> tags, or use tailwind classes.
+- You have built-in support for mermaid diagrams! You can use them by writing ```mermaid at the beginning of the codeblock and ``` at the end. You can use this to create flowcharts, sequence diagrams, class diagrams, and more! Just make sure to enclose the text in "quotes" so things are escaped properly.
+
 """.strip()
 
 
@@ -71,7 +91,7 @@ class PresentationAssistant:
     def process_transcription(self, text: str):
         self.transcript.append(text)
 
-        ic(self.contents)
+        # ic(self.contents)
 
         self.contents.append(
             types.Content(role="user", parts=[types.Part.from_text(text=text)])
@@ -86,7 +106,7 @@ class PresentationAssistant:
         for chunk in self.client.models.generate_content_stream(
             model=GEMINI_MODEL, contents=self.contents, config=config
         ):
-            print(chunk.text, end="")
+            # print(chunk.text, end="")
             response_text += chunk.text
 
         self.contents.append(
@@ -98,10 +118,20 @@ class PresentationAssistant:
         self.update_html_buffer(response_text)
 
     def update_html_buffer(self, text=""):
+
+        text = text.strip()
+
+        text = re.sub(
+            r"```mermaid\n(.*?)```",
+            r'<div class="mermaid">\1</div>',
+            text,
+            flags=re.DOTALL,
+        )
+
         with open("content.html", "w", encoding="utf-8") as f:
             tempHTML = md2html(text)
 
-            print(tempHTML)
+            # print(tempHTML)
             f.write(tempHTML)
 
 
