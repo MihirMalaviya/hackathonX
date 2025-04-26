@@ -1,5 +1,6 @@
 # this is for markdown to html conversion
 import markdown
+import pyttsx3
 
 
 def md2html(text: str) -> str:
@@ -20,3 +21,14 @@ def md2html(text: str) -> str:
     )
 
     return html_code
+
+
+def text_to_speech(text: str):
+    """
+    converts text to speech
+    :param text: text to convert
+    :return: None
+    """
+    engine = pyttsx3.init()
+    engine.say(text)
+    engine.runAndWait()
